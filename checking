@@ -1,0 +1,906 @@
+using System;
+using System.IO;
+using UnityEngine;
+
+// Token: 0x02000451 RID: 1105
+public class CastleSkin
+{
+	// Token: 0x0600195B RID: 6491 RVA: 0x001D8FAC File Offset: 0x001D71AC
+	public CastleSkin()
+	{
+		this.tmpAssetName = new CString(256);
+	}
+
+	// Token: 0x0600195C RID: 6492 RVA: 0x001D8FE4 File Offset: 0x001D71E4
+	public void SortDirty()
+	{
+		this.SortType = CastleSkin._SortType.None;
+	}
+
+	// Token: 0x17000169 RID: 361
+	// (get) Token: 0x0600195D RID: 6493 RVA: 0x001D8FF0 File Offset: 0x001D71F0
+	public CastleSkin._SortType curSortType
+	{
+		get
+		{
+			return this.SortType;
+		}
+	}
+
+	// Token: 0x1700016A RID: 362
+	// (get) Token: 0x0600195E RID: 6494 RVA: 0x001D8FF8 File Offset: 0x001D71F8
+	public byte[] SkinUnlock
+	{
+		get
+		{
+			return this.CastleSwitch;
+		}
+	}
+
+	// Token: 0x1700016B RID: 363
+	// (get) Token: 0x0600195F RID: 6495 RVA: 0x001D9000 File Offset: 0x001D7200
+	public byte[] SkinLevel
+	{
+		get
+		{
+			return this.CastleEnhance;
+		}
+	}
+
+	// Token: 0x06001960 RID: 6496 RVA: 0x001D9008 File Offset: 0x001D7208
+	public void LoadTable()
+	{
+		this.CastleSkinTable = new CExternalTableWithWordKey<CastleSkinTbl>();
+		this.CastleEnhanceTable = new CExternalTableWithWordKey<CastleEnhanceTbl>();
+		this.CastleSkinTable.LoadTable("Castleunlock");
+		byte b = 0;
+		for (int i = 0; i < this.CastleSkinTable.TableCount; i++)
+		{
+			byte b2 = this.CastleSkinTable.GetRecordByIndex(i).Graphic;
+			if (b < b2)
+			{
+				b = b2;
+			}
+		}
+		this.CastleEnhanceIndexTable = new ushort[(int)this.CastleSkinTable.MapCount];
+		int tableCount = this.CastleSkinTable.TableCount;
+		this.AllAssetID = new int[(int)b];
+		this.AllSprite = new Sprite[(int)b];
+		this.AllMaterial = new Material[(int)b];
+		this.GraphicNameIndex = new ushort[(int)b];
+		this.DefaultExclamation = new byte[(this.CastleSkinTable.TableCount >> 3) + (((this.CastleSkinTable.TableCount & 7) <= 0) ? 0 : 1)];
+		this.SortCastleID = new ushort[tableCount];
+		this.ActiveCastleID = 0;
+		byte b3 = 0;
+		for (int j = 0; j < this.CastleSkinTable.TableCount; j++)
+		{
+			CastleSkinTbl recordByIndex = this.CastleSkinTable.GetRecordByIndex(j);
+			byte b2 = recordByIndex.Graphic;
+			if (b2 == 1 || b2 == 2)
+			{
+				b2 = 0;
+			}
+			int num = 0;
+			if (b2 > 0)
+			{
+				num = (int)(b2 - 2);
+			}
+			if (recordByIndex.DefaultExclamation == 0)
+			{
+				this.SetBitField((byte)recordByIndex.ID, this.DefaultExclamation);
+			}
+			this.GraphicNameIndex[num] = recordByIndex.Name;
+			if (recordByIndex.Priority != 255 && recordByIndex.Priority > b3)
+			{
+				b3 = recordByIndex.Priority;
+				this.ActiveCastleID = recordByIndex.ID;
+			}
+		}
+		this.CastleEnhanceTable.LoadTable("CastleEnhance");
+		ushort num2 = 255;
+		for (int k = 0; k < this.CastleEnhanceTable.TableCount; k++)
+		{
+			CastleEnhanceTbl recordByIndex2 = this.CastleEnhanceTable.GetRecordByIndex(k);
+			if (num2 != recordByIndex2.CastleID)
+			{
+				num2 = recordByIndex2.CastleID;
+				if ((int)num2 <= this.CastleEnhanceIndexTable.Length)
+				{
+					this.CastleEnhanceIndexTable[(int)(num2 - 1)] = recordByIndex2.ID;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001961 RID: 6497 RVA: 0x001D9250 File Offset: 0x001D7450
+	public CastleEnhanceTbl GetCastleEnhanceData(byte CastleID, byte Rank)
+	{
+		if (CastleID == 0 || Rank > 5)
+		{
+			return default(CastleEnhanceTbl);
+		}
+		return this.CastleEnhanceTable.GetRecordByKey(this.CastleEnhanceIndexTable[(int)(CastleID - 1)] + (ushort)Rank);
+	}
+
+	// Token: 0x06001962 RID: 6498 RVA: 0x001D928C File Offset: 0x001D748C
+	private void LoadCastleSkinSave()
+	{
+		if (this.SaveExclamationData == null)
+		{
+			byte b = 5;
+			try
+			{
+				this.tmpAssetName.ClearString();
+				this.tmpAssetName.StringToFormat(AssetManager.persistentDataPath);
+				this.tmpAssetName.IntToFormat(DataManager.Instance.RoleAttr.UserId, 1, false);
+				this.tmpAssetName.StringToFormat(this.ExclamationSaveName);
+				this.tmpAssetName.AppendFormat("{0}/Data/{1}{2}");
+				this.tmpAssetName.SetLength(this.tmpAssetName.Length);
+				using (FileStream fileStream = new FileStream(this.tmpAssetName.ToString(), 4, 1))
+				{
+					if (fileStream.Length > 0L)
+					{
+						using (BinaryReader binaryReader = new BinaryReader(fileStream))
+						{
+							b = binaryReader.ReadByte();
+							this.SaveExclamationData = binaryReader.ReadBytes((int)b);
+							this.UnlockCastleSkinNotice = binaryReader.ReadByte();
+						}
+					}
+					else
+					{
+						this.SaveExclamationData = new byte[(int)b];
+						Array.Copy(this.DefaultExclamation, this.SaveExclamationData, Math.Min(this.DefaultExclamation.Length, this.SaveExclamationData.Length));
+					}
+				}
+				this.tmpAssetName.SetLength(this.tmpAssetName.MaxLength);
+			}
+			catch (Exception ex)
+			{
+				this.SaveExclamationData = new byte[(int)b];
+				Array.Copy(this.DefaultExclamation, this.SaveExclamationData, Math.Min(this.DefaultExclamation.Length, this.SaveExclamationData.Length));
+			}
+		}
+		if (this.CastleSwitch.Length != this.SaveExclamationData.Length)
+		{
+			byte[] array = new byte[this.CastleSwitch.Length];
+			Array.Copy(this.SaveExclamationData, array, this.SaveExclamationData.Length);
+			this.SaveExclamationData = array;
+		}
+	}
+
+	// Token: 0x06001963 RID: 6499 RVA: 0x001D949C File Offset: 0x001D769C
+	private void UpdateExclamationCount()
+	{
+		this.ExclamationCount = (byte)this.CastleSkinTable.TableCount;
+		for (int i = 0; i < this.SaveExclamationData.Length; i++)
+		{
+			for (int j = 0; j < 8; j++)
+			{
+				if (((int)this.SaveExclamationData[i] & 1 << j) > 0 && this.ExclamationCount > 0)
+				{
+					this.ExclamationCount -= 1;
+				}
+			}
+		}
+		if (this.UnlockCastleSkinNotice == 0 && this.ExclamationCount == 0)
+		{
+			this.UnlockCastleSkinNotice = 1;
+		}
+	}
+
+	// Token: 0x06001964 RID: 6500 RVA: 0x001D9534 File Offset: 0x001D7734
+	public byte GetExclamationCount()
+	{
+		return this.ExclamationCount;
+	}
+
+	// Token: 0x06001965 RID: 6501 RVA: 0x001D953C File Offset: 0x001D773C
+	public void SaveCastleSkinSave()
+	{
+		try
+		{
+			this.tmpAssetName.ClearString();
+			this.tmpAssetName.StringToFormat(AssetManager.persistentDataPath);
+			this.tmpAssetName.IntToFormat(DataManager.Instance.RoleAttr.UserId, 1, false);
+			this.tmpAssetName.StringToFormat(this.ExclamationSaveName);
+			this.tmpAssetName.AppendFormat("{0}/Data/{1}{2}");
+			this.tmpAssetName.SetLength(this.tmpAssetName.Length);
+			using (FileStream fileStream = new FileStream(this.tmpAssetName.ToString(), 4))
+			{
+				using (BinaryWriter binaryWriter = new BinaryWriter(fileStream))
+				{
+					binaryWriter.Write((byte)this.SaveExclamationData.Length);
+					binaryWriter.Write(this.SaveExclamationData, 0, this.SaveExclamationData.Length);
+					binaryWriter.Write(this.UnlockCastleSkinNotice);
+				}
+			}
+			this.tmpAssetName.SetLength(this.tmpAssetName.MaxLength);
+		}
+		catch (Exception ex)
+		{
+		}
+	}
+
+	// Token: 0x06001966 RID: 6502 RVA: 0x001D969C File Offset: 0x001D789C
+	public bool CheckShowCastleSkin()
+	{
+		return GUIManager.Instance.BuildingData.GetBuildData(8, 0).Level >= 9;
+	}
+
+	// Token: 0x06001967 RID: 6503 RVA: 0x001D96CC File Offset: 0x001D78CC
+	public bool CheckShowExclamation(bool bCheckNewbie = false)
+	{
+		byte level = GUIManager.Instance.BuildingData.GetBuildData(8, 0).Level;
+		bool result = false;
+		if (this.ExclamationCount > 0)
+		{
+			result = true;
+		}
+		else if (bCheckNewbie && ((level >= 9 && this.UnlockCastleSkinNotice == 0) || (level >= 25 && !DataManager.Instance.CheckPrizeFlag(21))))
+		{
+			result = true;
+		}
+		return result;
+	}
+
+	// Token: 0x06001968 RID: 6504 RVA: 0x001D9740 File Offset: 0x001D7940
+	public bool CheckSelect(byte ID)
+	{
+		return this.CheckBitField(ID, this.SaveExclamationData);
+	}
+
+	// Token: 0x06001969 RID: 6505 RVA: 0x001D9750 File Offset: 0x001D7950
+	public void SetSelect(byte ID)
+	{
+		bool flag = this.CheckSelect(ID);
+		this.SetBitField(ID, this.SaveExclamationData);
+		if (flag != this.CheckSelect(ID) && this.ExclamationCount > 0)
+		{
+			this.ExclamationCount -= 1;
+			if (this.ExclamationCount == 0)
+			{
+				GUIManager.Instance.BuildingData.UpdateBuildState(5, 255);
+			}
+		}
+	}
+
+	// Token: 0x0600196A RID: 6506 RVA: 0x001D97BC File Offset: 0x001D79BC
+	public bool CheckUnlock(byte ID)
+	{
+		return this.CheckBitField(ID, this.CastleSwitch);
+	}
+
+	// Token: 0x0600196B RID: 6507 RVA: 0x001D97CC File Offset: 0x001D79CC
+	public void SetUnlock(byte ID)
+	{
+		this.SetBitField(ID, this.CastleSwitch);
+	}
+
+	// Token: 0x0600196C RID: 6508 RVA: 0x001D97DC File Offset: 0x001D79DC
+	private bool CheckBitField(byte ID, byte[] Array)
+	{
+		if (ID == 0)
+		{
+			return false;
+		}
+		int num = (ID -= 1) >> 3;
+		int num2 = (int)(ID & 7);
+		return num < Array.Length && ((int)Array[num] & 1 << num2) > 0;
+	}
+
+	// Token: 0x0600196D RID: 6509 RVA: 0x001D9824 File Offset: 0x001D7A24
+	private void SetBitField(byte ID, byte[] Array)
+	{
+		if (ID == 0)
+		{
+			return;
+		}
+		int num = (ID -= 1) >> 3;
+		int num2 = (int)(ID & 7);
+		if (num < Array.Length)
+		{
+			int num3 = num;
+			Array[num3] |= (byte)(1 << num2);
+		}
+	}
+
+	// Token: 0x0600196E RID: 6510 RVA: 0x001D9864 File Offset: 0x001D7A64
+	public byte GetCastleEnhance(byte ID)
+	{
+		if (ID == 0)
+		{
+			return 0;
+		}
+		return this.CastleEnhance[(int)(ID - 1)];
+	}
+
+	// Token: 0x0600196F RID: 6511 RVA: 0x001D9878 File Offset: 0x001D7A78
+	private void Load(byte ID, byte Level)
+	{
+		if (this.AssetID != 0)
+		{
+			AssetManager.UnloadAssetBundle(this.AssetID, true);
+		}
+		this.tmpAssetName.ClearString();
+		byte graphic = this.CastleSkinTable.GetRecordByKey((ushort)ID).Graphic;
+		if (graphic > 0)
+		{
+			this.tmpAssetName.IntToFormat((long)graphic, 3, false);
+			this.tmpAssetName.AppendFormat("UI/castle_{0}");
+		}
+		else
+		{
+			this.tmpAssetName.IntToFormat((long)graphic, 3, false);
+			byte b = 1;
+			if (Level >= 9 && Level < 17)
+			{
+				b = 2;
+			}
+			else if (Level >= 17 && Level < 25)
+			{
+				b = 3;
+			}
+			else if (Level >= 25)
+			{
+				b = 4;
+			}
+			this.tmpAssetName.IntToFormat((long)b, 1, false);
+			this.tmpAssetName.AppendFormat("UI/castle_{0}-{1}");
+		}
+		AssetBundle assetBundle = AssetManager.GetAssetBundle(this.tmpAssetName, out this.AssetID);
+		this.CastleID = ID;
+		this.Level = Level;
+		if (assetBundle == null)
+		{
+			if (this.AssetID != 0)
+			{
+				AssetManager.UnloadAssetBundle(this.AssetID, true);
+			}
+			this.AssetID = 0;
+			this.LoadDefault(Level);
+			this.sprite = this.defaultSprite;
+			this.material = this.defaultMaterial;
+			return;
+		}
+		Object[] array = assetBundle.LoadAll();
+		this.sprite = (array[1] as Sprite);
+		this.material = (array[3] as Material);
+	}
+
+	// Token: 0x06001970 RID: 6512 RVA: 0x001D99E0 File Offset: 0x001D7BE0
+	private void LoadDefault(byte Level)
+	{
+		if (this.defaultSprite != null)
+		{
+			return;
+		}
+		byte b = 0;
+		this.tmpAssetName.ClearString();
+		this.tmpAssetName.IntToFormat((long)b, 3, false);
+		byte b2 = 1;
+		if (Level >= 9 && Level < 17)
+		{
+			b2 = 2;
+		}
+		else if (Level >= 17 && Level < 25)
+		{
+			b2 = 3;
+		}
+		else if (Level >= 25)
+		{
+			b2 = 4;
+		}
+		this.tmpAssetName.IntToFormat((long)b2, 1, false);
+		this.tmpAssetName.AppendFormat("UI/castle_{0}-{1}");
+		AssetBundle assetBundle = AssetManager.GetAssetBundle(this.tmpAssetName, out this.AssetID);
+		if (assetBundle == null)
+		{
+			if (this.AssetID != 0)
+			{
+				AssetManager.UnloadAssetBundle(this.AssetID, true);
+			}
+			this.AssetID = 0;
+			this.defaultSprite = GUIManager.Instance.BuildingData.GetBuildSprite(13, 0);
+			this.defaultMaterial = GUIManager.Instance.MapSpriteMaterial;
+			this.defaultMaterialUI = GUIManager.Instance.MapSpriteUIMaterial;
+			return;
+		}
+		Object[] array = assetBundle.LoadAll();
+		this.defaultSprite = (array[1] as Sprite);
+		this.defaultMaterial = (array[3] as Material);
+		this.defaultMaterialUI = (array[4] as Material);
+	}
+
+	// Token: 0x06001971 RID: 6513 RVA: 0x001D9B1C File Offset: 0x001D7D1C
+	public Material GetMaterial(byte ID, byte Level = 0)
+	{
+		if (this.material == null || (ID > 1 && this.CastleID != ID) || (ID == 1 && (this.CastleID != ID || this.Level != Level)))
+		{
+			this.Load(ID, Level);
+		}
+		return this.material;
+	}
+
+	// Token: 0x06001972 RID: 6514 RVA: 0x001D9B7C File Offset: 0x001D7D7C
+	public Sprite GetSprite(byte ID, byte Level = 0)
+	{
+		if (this.sprite == null || (ID > 1 && this.CastleID != ID) || (ID == 1 && (this.CastleID != ID || this.Level != Level)))
+		{
+			this.Load(ID, Level);
+		}
+		return this.sprite;
+	}
+
+	// Token: 0x06001973 RID: 6515 RVA: 0x001D9BDC File Offset: 0x001D7DDC
+	public void Destroy()
+	{
+		if (this.AssetID != 0)
+		{
+			AssetManager.UnloadAssetBundle(this.AssetID, true);
+		}
+		this.AssetID = (int)(this.CastleID = 0);
+	}
+
+	// Token: 0x06001974 RID: 6516 RVA: 0x001D9C10 File Offset: 0x001D7E10
+	public void KeepCastleSkinUI()
+	{
+		this.bUILoaded = 2;
+	}
+
+	// Token: 0x06001975 RID: 6517 RVA: 0x001D9C1C File Offset: 0x001D7E1C
+	public void ClearCastleSkinUI(bool CleanImmediate = false)
+	{
+		if (this.bUILoaded == 0)
+		{
+			return;
+		}
+		if (this.bUILoaded > 1 && !CleanImmediate)
+		{
+			this.bUILoaded = 1;
+			return;
+		}
+		for (int i = 0; i < this.AllAssetID.Length; i++)
+		{
+			AssetManager.UnloadAssetBundle(this.AllAssetID[i], true);
+			this.AllAssetID[i] = 0;
+		}
+		this.bUILoaded = 0;
+	}
+
+	// Token: 0x06001976 RID: 6518 RVA: 0x001D9C88 File Offset: 0x001D7E88
+	private void LoadUISprite(byte ID, byte Level = 0)
+	{
+		if (ID == 1 || ID == 2)
+		{
+			return;
+		}
+		int num = 0;
+		if (ID > 0)
+		{
+			num = (int)(ID - 2);
+		}
+		if (this.AllAssetID[num] != 0)
+		{
+			return;
+		}
+		this.tmpAssetName.ClearString();
+		if (ID > 0)
+		{
+			this.tmpAssetName.IntToFormat((long)ID, 3, false);
+			this.tmpAssetName.AppendFormat("UI/castle_{0}");
+		}
+		else
+		{
+			this.UILevel = Level;
+			this.tmpAssetName.IntToFormat((long)ID, 3, false);
+			byte b = 1;
+			if (Level >= 9 && Level < 17)
+			{
+				b = 2;
+			}
+			else if (Level >= 17 && Level < 25)
+			{
+				b = 3;
+			}
+			else if (Level >= 25)
+			{
+				b = 4;
+			}
+			this.tmpAssetName.IntToFormat((long)b, 1, false);
+			this.tmpAssetName.AppendFormat("UI/castle_{0}-{1}");
+		}
+		AssetBundle assetBundle = AssetManager.GetAssetBundle(this.tmpAssetName, out this.AllAssetID[num]);
+		if (assetBundle == null)
+		{
+			if (this.AllAssetID[num] != 0)
+			{
+				AssetManager.UnloadAssetBundle(this.AllAssetID[num], true);
+			}
+			this.AllAssetID[num] = 0;
+			this.LoadDefault(0);
+			this.AllSprite[num] = this.defaultSprite;
+			this.AllMaterial[num] = this.defaultMaterialUI;
+			return;
+		}
+		Object[] array = assetBundle.LoadAll();
+		this.AllSprite[num] = (array[1] as Sprite);
+		this.AllMaterial[num] = (array[4] as Material);
+		this.bUILoaded = 1;
+	}
+
+	// Token: 0x06001977 RID: 6519 RVA: 0x001D9E04 File Offset: 0x001D8004
+	public Sprite GetUISprite(byte ID, byte Level = 0)
+	{
+		if (ID == 1 || ID == 2)
+		{
+			ID = 0;
+		}
+		int num = 0;
+		if (ID > 0)
+		{
+			num = (int)(ID - 2);
+		}
+		if (num >= this.AllAssetID.Length)
+		{
+			this.LoadDefault(0);
+			return this.defaultSprite;
+		}
+		if (this.AllAssetID[num] == 0)
+		{
+			this.LoadUISprite(ID, Level);
+		}
+		else if (ID == 0 && this.UILevel != Level)
+		{
+			AssetManager.UnloadAssetBundle(this.AllAssetID[num], true);
+			this.AllAssetID[num] = 0;
+			this.LoadUISprite(ID, Level);
+		}
+		if (this.AllSprite[num] == null)
+		{
+			this.LoadDefault(0);
+			return this.defaultSprite;
+		}
+		return this.AllSprite[num];
+	}
+
+	// Token: 0x06001978 RID: 6520 RVA: 0x001D9EC0 File Offset: 0x001D80C0
+	public Material GetUIMaterial(byte ID, byte Level = 0)
+	{
+		if (ID == 1 || ID == 2)
+		{
+			ID = 0;
+		}
+		int num = 0;
+		if (ID > 0)
+		{
+			num = (int)(ID - 2);
+		}
+		if (num >= this.AllAssetID.Length)
+		{
+			this.LoadDefault(0);
+			return this.defaultMaterialUI;
+		}
+		if (this.AllAssetID[num] == 0)
+		{
+			this.LoadUISprite(ID, Level);
+		}
+		else if (ID == 0 && this.UILevel != Level)
+		{
+			AssetManager.UnloadAssetBundle(this.AllAssetID[num], true);
+			this.AllAssetID[num] = 0;
+			this.LoadUISprite(ID, Level);
+		}
+		if (this.AllMaterial[num] == null)
+		{
+			this.LoadDefault(0);
+			return this.defaultMaterialUI;
+		}
+		return this.AllMaterial[num];
+	}
+
+	// Token: 0x06001979 RID: 6521 RVA: 0x001D9F7C File Offset: 0x001D817C
+	public string GetCastleSkinName(byte graphicID)
+	{
+		if (graphicID == 1 || graphicID == 2)
+		{
+			graphicID = 0;
+		}
+		int num = 0;
+		if (graphicID > 0)
+		{
+			num = (int)(graphicID - 2);
+		}
+		if (num >= this.GraphicNameIndex.Length || this.GraphicNameIndex[num] == 0)
+		{
+			return string.Empty;
+		}
+		return DataManager.Instance.mStringTable.GetStringByID((uint)this.GraphicNameIndex[num]);
+	}
+
+	// Token: 0x0600197A RID: 6522 RVA: 0x001D9FE0 File Offset: 0x001D81E0
+	private void UnlockMall()
+	{
+		if (MallManager.Instance.bLockBuyCastleID && MallManager.Instance.SendCheckCastleID != 0 && this.CheckUnlock((byte)MallManager.Instance.SendCheckCastleID))
+		{
+			MallManager.Instance.ClearSendCheckBuySN();
+		}
+	}
+
+	// Token: 0x0600197B RID: 6523 RVA: 0x001DA02C File Offset: 0x001D822C
+	public void RecvCastleUnlockdata(MessagePacket Mp)
+	{
+		GUIManager.Instance.BuildingData.CastleID = Mp.ReadByte(-1);
+		byte b = Mp.ReadByte(-1);
+		if (this.CastleSwitch == null || this.CastleSwitch.Length < (int)b)
+		{
+			this.CastleSwitch = new byte[(int)b];
+		}
+		byte b2 = Mp.ReadByte(-1);
+		if (this.CastleEnhance == null || this.CastleEnhance.Length < (int)(b * 8))
+		{
+			this.CastleEnhance = new byte[(int)(b * 8)];
+		}
+		this.LoadCastleSkinSave();
+		Mp.ReadBlock(this.CastleSwitch, 0, (int)b, -1);
+		int num = 0;
+		if (b2 > 0)
+		{
+			for (int i = 0; i < this.CastleSwitch.Length; i++)
+			{
+				for (int j = 0; j < 8; j++)
+				{
+					if (((int)this.CastleSwitch[i] & 1 << j) > 0)
+					{
+						int num2 = i * 8 + j;
+						this.CastleEnhance[num2] = Mp.ReadByte(-1);
+						if (this.CastleEnhance[num2] > 5)
+						{
+							this.CastleEnhance[num2] = 5;
+						}
+						this.SetSelect((byte)(num2 + 1));
+						num++;
+						if (num == (int)b2)
+						{
+							break;
+						}
+					}
+				}
+				if (num == (int)b2)
+				{
+					break;
+				}
+			}
+		}
+		this.UpdateExclamationCount();
+		this.SortDirty();
+		this.SetUnlock(1);
+		this.UnlockMall();
+		GUIManager.Instance.UpdateUI(EGUIWindow.UI_CastleSkin, 0, 0);
+		DataManager.Instance.AttribVal.UpdateAttrVal(UpdateAttrKind.CastleSkin);
+		GUIManager.Instance.UpdateUI(EGUIWindow.UI_CastleStrengthen, 4, 0);
+	}
+
+	// Token: 0x0600197C RID: 6524 RVA: 0x001DA1B4 File Offset: 0x001D83B4
+	public void RecvCastleSkinUpdate(MessagePacket Mp)
+	{
+		byte b = Mp.ReadByte(-1);
+		byte b2 = Mp.ReadByte(-1);
+		byte b3 = Mp.ReadByte(-1);
+		if (b2 == 0)
+		{
+			if (b == 0)
+			{
+				this.SortDirty();
+				this.SetUnlock(b3 + 1);
+				this.UnlockMall();
+				AudioManager.Instance.PlayMP3SFX(41011, 0f);
+				GUIManager.Instance.AddHUDMessage(DataManager.Instance.mStringTable.GetStringByID(867U), 254, true);
+				GUIManager.Instance.HideUILock(EUILock.Mall);
+				GUIManager.Instance.UpdateUI(EGUIWindow.UI_CastleSkin, 2, (int)(b3 + 1));
+			}
+			else
+			{
+				if (this.CastleEnhance.Length > (int)b3)
+				{
+					this.CastleEnhance[(int)b3] = Mp.ReadByte(-1);
+					if (this.CastleEnhance[(int)b3] > 5)
+					{
+						this.CastleEnhance[(int)b3] = 5;
+					}
+					if (this.CastleEnhance[(int)b3] >= 2)
+					{
+						AFAdvanceManager.Instance.TriggerAfAdvEvent(EAppsFlayerEvent.CASTLESKIN_LV2);
+					}
+				}
+				GUIManager.Instance.UpdateUI(EGUIWindow.UI_CastleStrengthen, 1, 0);
+			}
+			DataManager.Instance.AttribVal.UpdateAttrVal(UpdateAttrKind.CastleSkin);
+		}
+		else if (b2 == 1)
+		{
+			GUIManager.Instance.UpdateUI(EGUIWindow.UI_CastleStrengthen, 3, 0);
+		}
+	}
+
+	// Token: 0x0600197D RID: 6525 RVA: 0x001DA2E8 File Offset: 0x001D84E8
+	public void RecvCastleSkinChange(MessagePacket Mp)
+	{
+		if (Mp.ReadByte(-1) == 0)
+		{
+			DataManager instance = DataManager.Instance;
+			GUIManager instance2 = GUIManager.Instance;
+			instance2.BuildingData.CastleID = Mp.ReadByte(-1);
+			CString cstring = StringManager.Instance.StaticString1024();
+			cstring.StringToFormat(instance.mStringTable.GetStringByID((uint)instance2.BuildingData.castleSkin.CastleSkinTable.GetRecordByKey((ushort)instance2.BuildingData.CastleID).Name));
+			cstring.AppendFormat(instance.mStringTable.GetStringByID(9686U));
+			instance2.AddHUDMessage(cstring.ToString(), 255, true);
+			instance2.UpdateUI(EGUIWindow.UI_CastleSkin, 3, (int)instance2.BuildingData.CastleID);
+			instance2.HideUILock(EUILock.CastleSkin);
+			instance.AttribVal.UpdateAttrVal(UpdateAttrKind.CastleSkin);
+			AudioManager.Instance.PlayUISFX(UIKind.ItemUse);
+		}
+	}
+
+	// Token: 0x0600197E RID: 6526 RVA: 0x001DA3C8 File Offset: 0x001D85C8
+	public ushort[] GetAllCastleID(CastleSkin._SortType type, out byte count)
+	{
+		if (type == this.SortType)
+		{
+			count = this.SortCount;
+			return this.SortCastleID;
+		}
+		this.SortType = type;
+		this.SortCount = 0;
+		for (int i = 0; i < this.CastleSkinTable.TableCount; i++)
+		{
+			if (this.SortType == CastleSkin._SortType.Own)
+			{
+				if (this.CheckUnlock((byte)(i + 1)))
+				{
+					ushort[] sortCastleID = this.SortCastleID;
+					byte sortCount;
+					this.SortCount = (sortCount = this.SortCount) + 1;
+					sortCastleID[(int)sortCount] = (ushort)(i + 1);
+				}
+			}
+			else
+			{
+				ushort[] sortCastleID2 = this.SortCastleID;
+				byte sortCount;
+				this.SortCount = (sortCount = this.SortCount) + 1;
+				sortCastleID2[(int)sortCount] = (ushort)(i + 1);
+			}
+		}
+		this.SortComparer.type = this.SortType;
+		Array.Sort<ushort>(this.SortCastleID, 0, (int)this.SortCount, this.SortComparer);
+		if (this.SortCastleID.Length - 1 > (int)this.SortCount)
+		{
+			this.SortCastleID[(int)this.SortCount] = 0;
+		}
+		count = this.SortCount;
+		return this.SortCastleID;
+	}
+
+	// Token: 0x0600197F RID: 6527 RVA: 0x001DA4D0 File Offset: 0x001D86D0
+	public void SetCheckStrengthen(bool bSet)
+	{
+		this.bCheckCastleStrengthen = bSet;
+	}
+
+	// Token: 0x06001980 RID: 6528 RVA: 0x001DA4DC File Offset: 0x001D86DC
+	public bool GetCheckStrengthen()
+	{
+		return this.bCheckCastleStrengthen;
+	}
+
+	// Token: 0x04003805 RID: 14341
+	public const byte MaxRank = 5;
+
+	// Token: 0x04003806 RID: 14342
+	public const byte EnhanceRequireCastleLv = 25;
+
+	// Token: 0x04003807 RID: 14343
+	private int AssetID;
+
+	// Token: 0x04003808 RID: 14344
+	private byte CastleID;
+
+	// Token: 0x04003809 RID: 14345
+	private byte Level;
+
+	// Token: 0x0400380A RID: 14346
+	private byte UILevel;
+
+	// Token: 0x0400380B RID: 14347
+	private Material material;
+
+	// Token: 0x0400380C RID: 14348
+	private Material defaultMaterial;
+
+	// Token: 0x0400380D RID: 14349
+	private Material defaultMaterialUI;
+
+	// Token: 0x0400380E RID: 14350
+	private Sprite sprite;
+
+	// Token: 0x0400380F RID: 14351
+	private Sprite defaultSprite;
+
+	// Token: 0x04003810 RID: 14352
+	private CString tmpAssetName;
+
+	// Token: 0x04003811 RID: 14353
+	private byte bUILoaded;
+
+	// Token: 0x04003812 RID: 14354
+	private int[] AllAssetID;
+
+	// Token: 0x04003813 RID: 14355
+	private Sprite[] AllSprite;
+
+	// Token: 0x04003814 RID: 14356
+	private Material[] AllMaterial;
+
+	// Token: 0x04003815 RID: 14357
+	private ushort[] SortCastleID;
+
+	// Token: 0x04003816 RID: 14358
+	private ushort[] GraphicNameIndex;
+
+	// Token: 0x04003817 RID: 14359
+	private byte SortCount;
+
+	// Token: 0x04003818 RID: 14360
+	private CastleSort SortComparer = new CastleSort();
+
+	// Token: 0x04003819 RID: 14361
+	private CastleSkin._SortType SortType;
+
+	// Token: 0x0400381A RID: 14362
+	private byte[] SaveExclamationData;
+
+	// Token: 0x0400381B RID: 14363
+	private string ExclamationSaveName = "ExclamationSave";
+
+	// Token: 0x0400381C RID: 14364
+	private byte ExclamationCount;
+
+	// Token: 0x0400381D RID: 14365
+	public byte UnlockCastleSkinNotice;
+
+	// Token: 0x0400381E RID: 14366
+	private byte[] CastleSwitch;
+
+	// Token: 0x0400381F RID: 14367
+	private byte[] CastleEnhance;
+
+	// Token: 0x04003820 RID: 14368
+	public CExternalTableWithWordKey<CastleSkinTbl> CastleSkinTable;
+
+	// Token: 0x04003821 RID: 14369
+	public CExternalTableWithWordKey<CastleEnhanceTbl> CastleEnhanceTable;
+
+	// Token: 0x04003822 RID: 14370
+	private ushort[] CastleEnhanceIndexTable;
+
+	// Token: 0x04003823 RID: 14371
+	public ushort ActiveCastleID;
+
+	// Token: 0x04003824 RID: 14372
+	private byte[] DefaultExclamation;
+
+	// Token: 0x04003825 RID: 14373
+	private bool bCheckCastleStrengthen = true;
+
+	// Token: 0x02000452 RID: 1106
+	public enum _SortType
+	{
+		// Token: 0x04003827 RID: 14375
+		None,
+		// Token: 0x04003828 RID: 14376
+		All,
+		// Token: 0x04003829 RID: 14377
+		Own
+	}
+}
